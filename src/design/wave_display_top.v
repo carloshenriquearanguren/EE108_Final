@@ -16,7 +16,7 @@ module wave_display_top(
     wire [8:0] read_address, write_address;
     wire read_index;
     wire write_en;
-    wire wave_display_idle = ~vsync;
+    wire wave_display_idle;
 
     wave_capture wc(
         .clk(clk),
@@ -53,7 +53,8 @@ module wave_display_top(
         .read_value(read_sample),
         .read_index(read_index),
         .valid_pixel(valid_pixel),
-        .r(wd_r), .g(wd_g), .b(wd_b)
+        .r(wd_r), .g(wd_g), .b(wd_b),
+        .wave_display_idle(wave_display_idle)
     );
 
     assign {r, g, b} = valid_pixel ? {wd_r, wd_g, wd_b} : {3{8'b0}};
