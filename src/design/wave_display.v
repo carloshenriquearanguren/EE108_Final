@@ -13,5 +13,61 @@ module wave_display (
     output wire [7:0] b
 );
 
-// Implement me!
+    // Region gating (2nd & 3rd quarters, top half), 2-pixel-wide X by dropping x[0]
+    wire quarter2 = (x[10:9]== 2'b01); // 2nd quarter
+    wire quarter3 = (x[10:9]== 2'b10); // 3rd quarter
+    wire top_half = (y[9]== 1'b0); // MSB of y is 0 => top half
+    wire in_window = valid & top_half & (quarter2 | quarter3);
+
+    // X -> RAM address mapping (9 bits): {read_index, mid_bit, x[7:1]}
+    // mid_bit = 0 in 2nd quarter, 1 in 3rd quarter
+    
+    wire mid_bit = quarter3; // 0 for Q2, 1 for Q3
+    wire [6:0] addr_low = x[7:1]; // drop LSB x[0] for 2-pixel width
+    wire [8:0] addr_next = {read_index, mid_bit, addr_low};
+    assign read_address = addr_next;
+
+    // 800x480 amplitude fix: scale 0..255 to ~0..239 (multiply by 15/16)
+    // read_value_adjusted = read_value - (read_value >> 4)
+    wire [7:0] read_value_adjusted = read_value - (read_value >> 4);
+
+    // Handle 1-cycle RAM latency and avoid reusing the same sample twice:
+    // latch a new RAM sample only when read_address changes.
+    // Keep previous and current samples for vertical span check.
+
+    reg [8:0] ra_last;
+    reg [7:0] sample_prev, sample_curr;
+
+    always @(posedge clk) begin
+        if (reset) begin
+            ra_last <= 9'd0;
+            sample_prev <= 8'd0;
+            sample_curr <= 8'd0;
+        end else begin
+            if (addr_next != ra_last) begin
+                // On an address change: RAM output corresponds to the previous address,
+                // so shift curr -> prev and capture the latest read_value_adjusted into curr.
+                sample_prev <= sample_curr;
+                sample_curr <= read_value_adjusted;
+                ra_last <= addr_next;
+            end
+        end
+    end
+
+    // Y mapping: use y[8:1] to get 8-bit value in the top half, 2-pixel-high stroke
+    // Pixel is on if y falls between the two adjacent samples
+    
+    wire [7:0] y8 = y[8:1];
+    wire [7:0] lo = (sample_curr < sample_prev) ? sample_curr : sample_prev;
+    wire [7:0] hi = (sample_curr < sample_prev) ? sample_prev : sample_curr;
+
+    assign valid_pixel = in_window & (y8 >= lo) & (y8 <= hi);
+
+    // White for waveform, black otherwise
+    assign r = valid_pixel ? 8'hFF : 8'h00;
+    assign g = valid_pixel ? 8'hFF : 8'h00;
+    assign b = valid_pixel ? 8'hFF : 8'h00;
+
+
 endmodule
+
