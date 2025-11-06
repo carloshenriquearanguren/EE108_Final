@@ -39,21 +39,31 @@ module wave_display (
     reg [8:0] ra_last;
     reg [7:0] sample_prev, sample_curr;
 
-    always @(posedge clk) begin
-        if (reset) begin
-            ra_last <= 9'd0;
-            sample_prev <= 8'd0;
-            sample_curr <= 8'd0;
-        end else begin
-            if (addr_next != ra_last) begin
-                // On an address change: RAM output corresponds to the previous address,
-                // so shift curr -> prev and capture the latest read_value_adjusted into curr.
-                sample_prev <= sample_curr;
-                sample_curr <= read_value_adjusted;
-                ra_last <= addr_next;
-            end
-        end
-    end
+    // ra_last 
+    dffre #(9) ra_last_ff (
+        .clk(clk),
+        .r(reset),
+        .en(addr_change),
+        .d(addr_next),
+        .q(ra_last)
+    );
+
+    // sample_prev 
+    dffre #(8) sample_prev_ff (
+        .clk(clk),
+        .r(reset),
+        .en(addr_change),
+        .d(sample_curr),            
+        .q(sample_prev)
+    );
+    // sample_curr
+    dffre #(8) sample_curr_ff (
+        .clk(clk),
+        .r(reset),
+        .en(addr_change),
+        .d(read_value_adjusted),  
+        .q(sample_curr)
+    );
 
     // Y mapping: use y[8:1] to get 8-bit value in the top half, 2-pixel-high stroke
     // Pixel is on if y falls between the two adjacent samples
