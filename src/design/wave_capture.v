@@ -71,9 +71,14 @@ module wave_capture (
      always @(*) begin
         case (state) 
             ARMED: begin 
-                next_state = crossing ? ACTIVE : ARMED; 
-                next_counter = crossing ? counter + 1 : 0; 
-                next_read_index = read_index; 
+                if (crossing) begin
+                    next_state = ACTIVE;
+                    next_counter = 8'd0;           
+                end else begin
+                    next_state = ARMED;
+                    next_counter = 8'd0;          
+                end
+                next_read_index = read_index;
             end
             ACTIVE: begin
                 next_state = (counter == 8'd255) ? WAIT : ACTIVE;
@@ -99,7 +104,7 @@ module wave_capture (
      end
          
      assign write_address = {~read_index, counter};
-     assign write_enable = (state == ACTIVE);
+     assign write_enable = (state == ACTIVE) & new_sample_ready; 
      assign write_sample = {~sample[15], sample[14:8]};
 
 endmodule
