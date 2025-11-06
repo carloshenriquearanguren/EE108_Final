@@ -14,10 +14,11 @@ module wave_display (
 );
 
     // Region gating (2nd & 3rd quarters, top half), 2-pixel-wide X by dropping x[0]
-    wire quarter2 = (x[9:8]== 2'b01); // 2nd quarter
+    wire quarter2 = (x[9:8] == 2'b01); // 2nd quarter
     wire quarter3 = (x[9:8]== 2'b10); // 3rd quarter
     wire top_half = (y[9]== 1'b0); // MSB of y is 0 => top half
-    wire in_window = valid & top_half & (quarter2 | quarter3);
+    wire invalid_bit = (x <= 11'b00100000011);
+    wire in_window = valid & top_half & (quarter2 | quarter3) & ~invalid_bit;
 
     // X -> RAM address mapping (9 bits): {read_index, mid_bit, x[7:1]}
     // mid_bit = 0 in 2nd quarter, 1 in 3rd quarter
