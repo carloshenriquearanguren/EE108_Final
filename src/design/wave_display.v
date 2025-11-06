@@ -14,8 +14,8 @@ module wave_display (
 );
 
     // Region gating (2nd & 3rd quarters, top half), 2-pixel-wide X by dropping x[0]
-    wire quarter2 = (x[10:9]== 2'b01); // 2nd quarter
-    wire quarter3 = (x[10:9]== 2'b10); // 3rd quarter
+    wire quarter2 = (x[9:8]== 2'b01); // 2nd quarter
+    wire quarter3 = (x[9:8]== 2'b10); // 3rd quarter
     wire top_half = (y[9]== 1'b0); // MSB of y is 0 => top half
     wire in_window = valid & top_half & (quarter2 | quarter3);
 
@@ -60,7 +60,7 @@ module wave_display (
     wire [7:0] y8 = y[8:1];
     wire [7:0] lo = (sample_curr < sample_prev) ? sample_curr : sample_prev;
     wire [7:0] hi = (sample_curr < sample_prev) ? sample_prev : sample_curr;
-
+    
     assign valid_pixel = in_window & (y8 >= lo) & (y8 <= hi);
 
     // White for waveform, black otherwise
@@ -70,4 +70,3 @@ module wave_display (
 
 
 endmodule
-
