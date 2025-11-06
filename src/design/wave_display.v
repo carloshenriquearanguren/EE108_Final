@@ -38,6 +38,7 @@ module wave_display (
 
     reg [8:0] ra_last;
     reg [7:0] sample_prev, sample_curr;
+    wire addr_change = (addr_next != ra_last);
 
     // ra_last 
     dffre #(9) ra_last_ff (
