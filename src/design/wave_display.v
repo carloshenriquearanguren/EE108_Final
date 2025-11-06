@@ -28,8 +28,8 @@ module wave_display (
     assign read_address = addr_next;
 
     // 800x480 amplitude fix: scale 0..255 to ~0..239 (multiply by 15/16)
-    // read_value_adjusted = read_value - (read_value >> 4)
-    wire [7:0] read_value_adjusted = read_value - (read_value >> 4);
+    // read_value_adjusted = read_value/2 + 32 
+    wire [7:0] read_value_adjusted = (read_value >> 1) + 8'd32;
 
     // Handle 1-cycle RAM latency and avoid reusing the same sample twice:
     // latch a new RAM sample only when read_address changes.
