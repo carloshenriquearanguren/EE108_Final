@@ -36,8 +36,8 @@ module wave_display (
     // latch a new RAM sample only when read_address changes.
     // Keep previous and current samples for vertical span check.
 
-    reg [8:0] ra_last;
-    reg [7:0] sample_prev, sample_curr;
+    wire [8:0] ra_last;
+    wire [7:0] sample_prev, sample_curr;
     wire addr_change = (addr_next != ra_last);
 
     // ra_last 
