@@ -43,20 +43,21 @@ module wave_display_top(
  
     wire valid_pixel;
     wire [7:0] wd_r, wd_g, wd_b;
+    
     wave_display wd(
         .clk(clk),
         .reset(reset),
         .x(x),
         .y(y),
         .valid(valid),
+        .vsync(vsync),
         .read_address(read_address),
         .read_value(read_sample),
         .read_index(read_index),
         .valid_pixel(valid_pixel),
-        .r(wd_r), .g(wd_g), .b(wd_b),
-        .wave_display_idle(wave_display_idle)
+        .wave_display_idle(wave_display_idle),
+        .r(wd_r), .g(wd_g), .b(wd_b)
     );
-
     assign {r, g, b} = valid_pixel ? {wd_r, wd_g, wd_b} : {3{8'b0}};
 
 endmodule

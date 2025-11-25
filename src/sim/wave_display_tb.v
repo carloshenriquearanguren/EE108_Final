@@ -21,6 +21,10 @@ module wave_display_tb;
     // RAM output (1-cycle latency)
     wire [7:0] read_value;
 
+    // vsync signal for testbench
+    reg vsync;
+    wire wave_display_idle;
+
     // DUT
     wave_display dut (
         .clk(clk),
@@ -28,10 +32,12 @@ module wave_display_tb;
         .x(x),
         .y(y),
         .valid(valid),
+        .vsync(vsync),
         .read_value(read_value),
         .read_index(read_index),
         .read_address(read_address),
         .valid_pixel(valid_pixel),
+        .wave_display_idle(wave_display_idle),
         .r(r), .g(g), .b(b)
     );
 
@@ -136,6 +142,7 @@ module wave_display_tb;
         x = 11'd0;
         y = 10'd0;
         read_index = 1'b0;
+        vsync = 1'b0;
 
         repeat (5) @(posedge clk);
         reset = 1'b0;

@@ -4,10 +4,12 @@ module wave_display (
     input [10:0] x,  // [0..1279]
     input [9:0]  y,  // [0..1023]
     input valid,
+    input vsync,
     input [7:0] read_value,
     input read_index,
     output wire [8:0] read_address,
     output wire valid_pixel,
+    output wire wave_display_idle,
     output wire [7:0] r,
     output wire [7:0] g,
     output wire [7:0] b
@@ -80,5 +82,8 @@ module wave_display (
     assign g = valid_pixel ? 8'hFF : 8'h00;
     assign b = valid_pixel ? 8'hFF : 8'h00;
 
+    // Generate wave_display_idle signal during vsync (vertical blanking)
+    // This allows wave_capture to safely switch buffers between frames
+    assign wave_display_idle = vsync;
 
 endmodule
