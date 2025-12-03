@@ -43,9 +43,9 @@ module note_player(
         end
     end
 
-    assign next_note = note_c;
-    assign next_dur  = dur_c;
-    assign next_done = done_c;
+    assign next_note     = note_c;
+    assign next_dur      = dur_c;
+    assign next_done     = done_c;
     assign done_with_note = done_q;
 
     // -------------------------------------------------------------------------
@@ -122,18 +122,20 @@ module note_player(
     wire signed [15:0] s2 = voice_en ? v2_sample : 16'sd0;
 
     // -------------------------------------------------------------------------
-    // Mix voices with attenuation to avoid clipping
+    // Mix voices with stronger attenuation to avoid clipping/distortion
     // -------------------------------------------------------------------------
+    // Each voice: >>3 (divide by 8), then summed:
+    // max per voice ~ 4095, sum of 3 voices ~ 12285 << 32767
     wire signed [17:0] sum_wide =
-        ($signed(s0) >>> 2) +
-        ($signed(s1) >>> 2) +
-        ($signed(s2) >>> 2);
+        ($signed(s0) >>> 3) +
+        ($signed(s1) >>> 3) +
+        ($signed(s2) >>> 3);
 
     wire signed [15:0] mixed = sum_wide[15:0];
 
     assign sample_out = (note_q == 6'd0) ? 16'd0 : mixed;
 
-    // new_sample_ready: reuse generate_next_sample (like original with sine_reader)
+    // new_sample_ready: reuse generate_next_sample (like original)
     assign new_sample_ready = generate_next_sample & play_enable;
 
 endmodule
