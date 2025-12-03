@@ -7,6 +7,9 @@ module wave_display_top(
     input [9:0]  y,  // [0..1023]     
     input valid,
     input vsync,
+    //for awd
+    input [3:0] w,
+    input [3:0] h,
     output [7:0] r,
     output [7:0] g,
     output [7:0] b
@@ -56,7 +59,9 @@ module wave_display_top(
         .read_index(read_index),
         .valid_pixel(valid_pixel),
         .wave_display_idle(wave_display_idle),
-        .r(wd_r), .g(wd_g), .b(wd_b)
+        .r(wd_r), .g(wd_g), .b(wd_b), 
+        //for awd
+        .w(w), .h(h)
     );
     assign {r, g, b} = valid_pixel ? {wd_r, wd_g, wd_b} : {3{8'b0}};
 
