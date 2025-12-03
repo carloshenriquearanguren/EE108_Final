@@ -7,6 +7,9 @@ module wave_display (
     input vsync,
     input [7:0] read_value,
     input read_index,
+    //for awd
+    input [3:0] w,
+    input [3:0] h,
     output wire [8:0] read_address,
     output wire valid_pixel,
     output wire wave_display_idle,
@@ -19,8 +22,19 @@ module wave_display (
     wire quarter2 = (x[9:8] == 2'b01); // 2nd quarter
     wire quarter3 = (x[9:8]== 2'b10); // 3rd quarter
     wire top_half = (y[9]== 1'b0); // MSB of y is 0 => top half
-    wire invalid_bit = (x <= 11'b00100000011);
-    wire in_window = valid & top_half & (quarter2 | quarter3) & ~invalid_bit;
+    wire bottom_half = (y[9] == 1'b1); //MSB of y is 1 => bottom half
+    wire invalid_bit = (x <= 11'b00100000011 & x >= 11'b00100000001);
+    wire quarter4 = (x[9:8] == 2'b11);
+    wire quarter1 = (x[9:8] == 2'b00);
+    reg in_window;
+    always @(*) begin
+        case(h)
+            4'b0001: in_window = valid & top_half & (quarter2 | quarter3 | quarter4) & ~invalid_bit;
+            4'b001x: in_window = valid & top_half & (quarter2 | quarter3 |quarter1 | quarter4) & ~invalid_bit;
+            default: in_window = valid & top_half & (quarter2 | quarter3) & ~invalid_bit;
+        endcase
+    end
+    //wire in_window = valid & top_half & (quarter2 | quarter3) & ~invalid_bit;
 
     // X -> RAM address mapping (9 bits): {read_index, mid_bit, x[7:1]}
     // mid_bit = 0 in 2nd quarter, 1 in 3rd quarter
@@ -32,8 +46,16 @@ module wave_display (
 
     // 800x480 amplitude fix: scale 0..255 to ~0..239 (multiply by 15/16)
     // read_value_adjusted = read_value/2 + 32 
-    wire [7:0] read_value_adjusted = (read_value >> 1) + 8'd32;
-
+    reg [7:0] read_value_adjusted;
+    always @(*) begin
+        case (w)
+            4'b0001: read_value_adjusted = (read_value >> 1) + 8'd32;
+            4'b001x: read_value_adjusted = (read_value >> 1) + 8'd64;
+            4'b01xx: read_value_adjusted = (read_value >> 1) + 8'd128;
+            4'b1xxx: read_value_adjusted = read_value;
+            default: read_value_adjusted = read_value;
+        endcase 
+    end
     // Handle 1-cycle RAM latency and avoid reusing the same sample twice:
     // latch a new RAM sample only when read_address changes.
     // Keep previous and current samples for vertical span check.
