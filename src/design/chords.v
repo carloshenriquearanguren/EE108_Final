@@ -1,63 +1,83 @@
-module chords #(
-    parameter FREQ_BITS=24,
-    parameter PHASE_BITS=24
-)(
-    input wire clk,
-    input wire reset,
-    input wire new_sample_ready,
-    input wire [FREQ_BITS-1:0] base_note_freq,
-    input wire base_note_active,
-    output wire signed [15:0] chords_sample
+// chords.v
+// Generate a 3-note chord using three sine_reader instances.
+// Each voice has its own step_size and enable; outputs are summed and attenuated.
+
+module chords(
+    input clk,
+    input reset,
+
+    input generate_next,   // 1-cycle strobe at audio sample rate
+
+    // per-voice control from frequency_rom or scheduler
+    input [19:0] step_size0,
+    input [19:0] step_size1,
+    input [19:0] step_size2,
+
+    input enable0,
+    input enable1,
+    input enable2,
+
+    output [15:0] sample,  // mixed chord sample (signed)
+    output sample_ready    // goes high when sample is valid
 );
 
-    // per-voice freq words (approx major triad)
-    wire [FREQ_BITS-1:0] freq0=base_note_freq;
-    wire [FREQ_BITS-1:0] freq1=base_note_freq+(base_note_freq>>2);
-    wire [FREQ_BITS-1:0] freq2=base_note_freq+(base_note_freq>>1);
+    // voice 0
+    wire v0_ready;
+    wire [15:0] v0_sample;
+    sine_reader SINE0(
+        .clk(clk),
+        .reset(reset),
+        .step_size(step_size0),
+        .generate_next(generate_next & enable0),
+        .sample_ready(v0_ready),
+        .sample(v0_sample)
+    );
 
-    wire [PHASE_BITS-1:0] freq0_ext={{(PHASE_BITS-FREQ_BITS){1'b0}},freq0};
-    wire [PHASE_BITS-1:0] freq1_ext={{(PHASE_BITS-FREQ_BITS){1'b0}},freq1};
-    wire [PHASE_BITS-1:0] freq2_ext={{(PHASE_BITS-FREQ_BITS){1'b0}},freq2};
+    // voice 1
+    wire v1_ready;
+    wire [15:0] v1_sample;
+    sine_reader SINE1(
+        .clk(clk),
+        .reset(reset),
+        .step_size(step_size1),
+        .generate_next(generate_next & enable1),
+        .sample_ready(v1_ready),
+        .sample(v1_sample)
+    );
 
-    // phase accumulators
-    wire [PHASE_BITS-1:0] phase0_q,phase1_q,phase2_q;
-    reg  [PHASE_BITS-1:0] phase0_d,phase1_d,phase2_d;
-    wire phase_en=new_sample_ready;
+    // voice 2
+    wire v2_ready;
+    wire [15:0] v2_sample;
+    sine_reader SINE2(
+        .clk(clk),
+        .reset(reset),
+        .step_size(step_size2),
+        .generate_next(generate_next & enable2),
+        .sample_ready(v2_ready),
+        .sample(v2_sample)
+    );
 
-    always @* begin
-        if(!base_note_active) begin
-            phase0_d={PHASE_BITS{1'b0}};
-            phase1_d={PHASE_BITS{1'b0}};
-            phase2_d={PHASE_BITS{1'b0}};
-        end else begin
-            phase0_d=phase0_q+freq0_ext;
-            phase1_d=phase1_q+freq1_ext;
-            phase2_d=phase2_q+freq2_ext;
-        end
-    end
+    // treat missing voices as zero when disabled
+    wire signed [15:0] v0 = enable0 ? v0_sample : 16'sd0;
+    wire signed [15:0] v1 = enable1 ? v1_sample : 16'sd0;
+    wire signed [15:0] v2 = enable2 ? v2_sample : 16'sd0;
 
-    dffre #(PHASE_BITS) phase0_reg(.clk(clk),.r(reset),.en(phase_en),.d(phase0_d),.q(phase0_q));
-    dffre #(PHASE_BITS) phase1_reg(.clk(clk),.r(reset),.en(phase_en),.d(phase1_d),.q(phase1_q));
-    dffre #(PHASE_BITS) phase2_reg(.clk(clk),.r(reset),.en(phase_en),.d(phase2_d),.q(phase2_q));
+    // sum with attenuation to avoid clipping
+    // divide each voice by 2 (>>1) before summing:
+    // max ~ 3 * (2^15 / 2) = 49152, still high; so we also divide the sum by 2.
+    wire signed [17:0] sum_wide =
+        ($signed(v0) >>> 1) +
+        ($signed(v1) >>> 1) +
+        ($signed(v2) >>> 1);
 
-    // waveform = top 16 bits of phase
-    wire signed [15:0] voice0=phase0_q[PHASE_BITS-1 -: 16];
-    wire signed [15:0] voice1=phase1_q[PHASE_BITS-1 -: 16];
-    wire signed [15:0] voice2=phase2_q[PHASE_BITS-1 -: 16];
+    wire signed [15:0] mixed = sum_wide[17:2];  // extra shift for headroom
 
-    // mix voices with attenuation
-    wire signed [17:0] mix_wide=($signed(voice0)>>>2)+($signed(voice1)>>>2)+($signed(voice2)>>>2);
+    assign sample = mixed;
 
-    reg signed [15:0] mix_d;
-    wire signed [15:0] mix_q;
-
-    always @* begin
-        if(!base_note_active) mix_d=16'sd0;
-        else mix_d=mix_wide[15:0];
-    end
-
-    dffre #(16) mix_reg(.clk(clk),.r(reset),.en(new_sample_ready),.d(mix_d),.q(mix_q));
-
-    assign chords_sample=mix_q;
+    // sample_ready: any enabled voice that was asked to generate
+    assign sample_ready =
+        (generate_next & enable0 & v0_ready) |
+        (generate_next & enable1 & v1_ready) |
+        (generate_next & enable2 & v2_ready);
 
 endmodule
