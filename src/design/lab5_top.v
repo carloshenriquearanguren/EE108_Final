@@ -1,11 +1,11 @@
 module lab5_top(
     /*
     'define H_SYNC_PULSE 112
-	'define H_BACK_PORCH 248
-	'define H_FRONT_PORCH 48
-	'define V_SYNC_PULSE 3
-	'define V_BACK_PORCH 38
-	'define V_FRONT_PORCH 1
+    'define H_BACK_PORCH 248
+    'define H_FRONT_PORCH 48
+    'define V_SYNC_PULSE 3
+    'define V_BACK_PORCH 38
+    'define V_FRONT_PORCH 1
     */ 	  
 
     // System Clock (125MHz)
@@ -15,10 +15,10 @@ module lab5_top(
     output  AC_ADR0,            // I2C Address pin (DO NOT CHANGE)
     output  AC_ADR1,            // I2C Address pin (DO NOT CHANGE)
     
-    output  AC_DOUT,           // I2S Signals
-    input   AC_DIN,           // I2S Signals
-    input   AC_BCLK,           // I2S Byte Clock
-    input   AC_WCLK,           // I2S Channel Clock
+    output  AC_DOUT,            // I2S Signals
+    input   AC_DIN,             // I2S Signals
+    input   AC_BCLK,            // I2S Byte Clock
+    input   AC_WCLK,            // I2S Channel Clock
     
     output  AC_MCLK,            // Master clock (48MHz)
     output  AC_SCK,             // I2C SCK
@@ -30,6 +30,10 @@ module lab5_top(
     output wire [2:0] leds_rgb_1,
 
     input [2:0] btn,
+
+    // *** NEW: on-board switches and extension button ***
+    input [1:0] sw,       // sw[0]=echo enable, sw[1]=attenuation
+    input       clkSel,   // BTNA_B from extension (delay step)
 
     /* 
     //VGA OUTPUT 
@@ -65,7 +69,6 @@ module lab5_top(
         .clk_in1(sysclk)
     );
 
-
   
     // button_press_unit's WIDTH parameter is exposed here so that you can
     // reduce it in simulation.  Setting it to 1 effectively disables it.
@@ -84,11 +87,11 @@ module lab5_top(
     wire [3:0]  r, g, b;
     wire [7:0] r_1, g_1, b_1;
       
-  wire [3:0] VGA_R;
-  wire [3:0] VGA_G;
-  wire [3:0] VGA_B;
-  wire VGA_HS;
-  wire VGA_VS;
+    wire [3:0] VGA_R;
+    wire [3:0] VGA_G;
+    wire [3:0] VGA_B;
+    wire VGA_HS;
+    wire VGA_VS;
  
 //   
 //  ****************************************************************************
@@ -109,6 +112,15 @@ module lab5_top(
         .reset(reset),
         .in(next_button),
         .out(next)
+    );
+
+    // *** NEW: debounced one-pulse from extension button for delay stepping ***
+    wire echo_delay_step;
+    button_press_unit #(.WIDTH(BPU_WIDTH)) echo_delay_button (
+        .clk(clk_100),
+        .reset(reset),
+        .in(clkSel),
+        .out(echo_delay_step)
     );
        
 //   
@@ -135,6 +147,58 @@ module lab5_top(
     );
     dffr pipeline_ff_new_frame (.clk(clk_100), .r(reset), .d(new_frame), .q(new_frame1));
 
+    // *** NEW: Echo effect controlled by sw[1:0] and clkSel ***
+
+    // Dry input to echo is codec_sample from music_player
+    wire signed [15:0] echo_in  = codec_sample;
+    wire signed [15:0] echo_out;
+
+    // SW0: echo enable
+    wire echo_enable = sw[0];
+
+    // SW1: attenuation level: 0 -> /2 (louder), 1 -> /4 (softer)
+    reg [2:0] echo_atten_sh;
+    always @(*) begin
+        if (sw[1] == 1'b0)
+            echo_atten_sh = 3'd1;   // 1/2
+        else
+            echo_atten_sh = 3'd2;   // 1/4
+    end
+
+    // Delay mode: 2-bit counter advanced by echo_delay_step (BTNA_B)
+    reg [1:0] delay_mode;
+    always @(posedge clk_100 or posedge reset) begin
+        if (reset)
+            delay_mode <= 2'b00;
+        else if (echo_delay_step)
+            delay_mode <= delay_mode + 2'b01;
+    end
+
+    // Map delay_mode to concrete delay lengths
+    reg [14:0] echo_delay;
+    always @(*) begin
+        case (delay_mode)
+            2'b00: echo_delay = 15'd2400;   // shortest ~50 ms
+            2'b01: echo_delay = 15'd4800;   // ~100 ms
+            2'b10: echo_delay = 15'd9600;   // ~200 ms
+            2'b11: echo_delay = 15'd14400;  // ~300 ms
+        endcase
+    end
+
+    echo #(
+        .SAMPLE_WIDTH(16),
+        .ADDR_BITS(15)
+    ) echo_inst (
+        .clk(clk_100),
+        .reset(reset),
+        .new_sample_ready(new_sample),
+        .in_sample(echo_in),
+        .echo_enable(echo_enable),
+        .delay_samples(echo_delay),
+        .atten_shift(echo_atten_sh),
+        .out_sample(echo_out)
+    );
+
 //   
 //  ****************************************************************************
 //      Codec interface
@@ -142,12 +206,13 @@ module lab5_top(
 //  
     wire [23:0] hphone_r = 0;
     wire [23:0] line_in_l = 0;  
-	wire [23:0] line_in_r =  0; 
+    wire [23:0] line_in_r =  0; 
 	
-    // Output the sample onto the LEDs for the fun of it.
+    // Output the (dry) sample onto the LEDs for the fun of it.
+    // You can change these to echo_out if you want to see echoed levels.
     assign leds_rgb_0 = codec_sample[15:13];
     assign leds_rgb_1 = codec_sample[11:9];
-    assign led = codec_sample[15:12];
+    assign led        = codec_sample[15:12];
 
     adau1761_codec adau1761_codec(
         .clk_100(clk_100),
@@ -161,7 +226,8 @@ module lab5_top(
         .AC_MCLK(AC_MCLK),
         .AC_SCK(AC_SCK),
         .AC_SDA(AC_SDA),
-        .hphone_l({codec_sample, 8'h00}),
+        // *** NEW: feed echoed audio to headphone left ***
+        .hphone_l({echo_out, 8'h00}),   // was {codec_sample, 8'h00}
         .hphone_r(hphone_r),
         .line_in_l(line_in_l),
         .line_in_r(line_in_r),
@@ -247,6 +313,5 @@ module lab5_top(
         .TMDS_DATA_P(TMDS_Data_p),
         .TMDS_DATA_N(TMDS_Data_n)
     );
-   
    
 endmodule
