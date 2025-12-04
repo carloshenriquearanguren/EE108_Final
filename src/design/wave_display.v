@@ -28,7 +28,7 @@ module wave_display (
     wire quarter1 = (x[9:8] == 2'b00);
     reg in_window;
     always @(*) begin
-        case(h)
+        case(w)
             4'b0001: in_window = valid & top_half & (quarter1) & ~invalid_bit;
             4'b0010: in_window = valid & top_half & (quarter1 | quarter2) & ~invalid_bit;
             4'b0100: in_window = valid & top_half & (quarter1| quarter2 | quarter3) & ~invalid_bit;
@@ -50,12 +50,12 @@ module wave_display (
     // read_value_adjusted = read_value/2 + 32 
     reg [7:0] read_value_adjusted;
     always @(*) begin
-        case (w)
-            4'b0001: read_value_adjusted = (read_value >> 1) + 8'd32;
-            4'b0010: read_value_adjusted = (read_value >> 2) + 8'd32;
-            4'b0100: read_value_adjusted = (read_value >> 3) + 8'd32;
+        case (h)
+            4'b0001: read_value_adjusted = (read_value >> 3) + 8'd64;
+            4'b0010: read_value_adjusted = (read_value >> 2) + 8'd64;
+            4'b0100: read_value_adjusted = (read_value >> 1) + 8'd64;
             4'b1000: read_value_adjusted = read_value;
-            default: read_value_adjusted = read_value;
+            default: read_value_adjusted = (read_value >> 3) + 8'd64;
         endcase 
     end
     // Handle 1-cycle RAM latency and avoid reusing the same sample twice:
@@ -110,5 +110,4 @@ module wave_display (
     // This allows wave_capture to safely switch buffers between frames
     assign wave_display_idle = vsync;
 
-endmodule
 
