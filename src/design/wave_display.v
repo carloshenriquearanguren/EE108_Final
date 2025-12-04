@@ -23,7 +23,7 @@ module wave_display (
     wire quarter3 = (x[9:8]== 2'b10); // 3rd quarter
     wire top_half = (y[9]== 1'b0); // MSB of y is 0 => top half
     wire bottom_half = (y[9] == 1'b1); //MSB of y is 1 => bottom half
-    wire invalid_bit = 0; // (x <= 11'b00100000011 & x >= 11'b00100000001);
+    wire invalid_bit = 0;//(x <= 11'b00100000011 & x >= 11'b00100000001) | (x <= 11'b10000000011 & x >= 11'b10000000001);
     wire quarter4 = (x[9:8] == 2'b11);
     wire quarter1 = (x[9:8] == 2'b00);
     reg in_window;
@@ -41,7 +41,7 @@ module wave_display (
     // X -> RAM address mapping (9 bits): {read_index, mid_bit, x[7:1]}
     // mid_bit = 0 in 2nd quarter, 1 in 3rd quarter
     
-    wire mid_bit = quarter3; // 0 for Q2, 1 for Q3
+    wire mid_bit = x[8] & quarter3;//quarter3; // 0 for Q2, 1 for Q3
     wire [6:0] addr_low = x[7:1]; // drop LSB x[0] for 2-pixel width
     wire [8:0] addr_next = {read_index, mid_bit, addr_low};
     assign read_address = addr_next;
@@ -52,9 +52,9 @@ module wave_display (
     always @(*) begin
         case (w)
             4'b0001: read_value_adjusted = (read_value >> 1) + 8'd32;
-            4'b001x: read_value_adjusted = (read_value >> 1) + 8'd64;
-            4'b01xx: read_value_adjusted = (read_value >> 1) + 8'd128;
-            4'b1xxx: read_value_adjusted = read_value;
+            4'b0010: read_value_adjusted = (read_value >> 2) + 8'd32;
+            4'b0100: read_value_adjusted = (read_value >> 3) + 8'd32;
+            4'b1000: read_value_adjusted = read_value;
             default: read_value_adjusted = read_value;
         endcase 
     end
@@ -111,3 +111,4 @@ module wave_display (
     assign wave_display_idle = vsync;
 
 endmodule
+
