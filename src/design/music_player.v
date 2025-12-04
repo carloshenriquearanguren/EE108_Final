@@ -64,6 +64,7 @@ module music_player (
     wire signed [17:0] sum_extended;
     assign sum_extended = {{2{ss0[15]}}, ss0} + {{2{ss1[15]}}, ss1} + {{2{ss2[15]}}, ss2};
 
+    wire signed [17:0] sum_scaled = sum_extended >>> 1;
     reg signed [15:0] mixed;
 
     always @(*) begin
