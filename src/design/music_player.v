@@ -69,14 +69,14 @@ module music_player (
 
     always @(*) begin
         // Check for positive overflow
-        if (sum_extended > 18'sd32767) 
+        if (sum_scaled > 18'sd32767) 
             mixed = 16'sd32767;
         // Check for negative overflow
-        else if (sum_extended < -18'sd32768) 
+        else if (sum_scaled < -18'sd32768) 
             mixed = -16'sd32768;
         // No overflow, just truncate
         else 
-            mixed = sum_extended[15:0];
+            mixed = sum_scaled[15:0];
     end
 
     wire [15:0] mixed_reg;
