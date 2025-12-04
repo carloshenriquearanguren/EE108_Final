@@ -23,15 +23,17 @@ module wave_display (
     wire quarter3 = (x[9:8]== 2'b10); // 3rd quarter
     wire top_half = (y[9]== 1'b0); // MSB of y is 0 => top half
     wire bottom_half = (y[9] == 1'b1); //MSB of y is 1 => bottom half
-    wire invalid_bit = (x <= 11'b00100000011 & x >= 11'b00100000001);
+    wire invalid_bit = 0; // (x <= 11'b00100000011 & x >= 11'b00100000001);
     wire quarter4 = (x[9:8] == 2'b11);
     wire quarter1 = (x[9:8] == 2'b00);
     reg in_window;
     always @(*) begin
         case(h)
-            4'b0001: in_window = valid & top_half & (quarter2 | quarter3 | quarter4) & ~invalid_bit;
-            4'b001x: in_window = valid & top_half & (quarter2 | quarter3 |quarter1 | quarter4) & ~invalid_bit;
-            default: in_window = valid & top_half & (quarter2 | quarter3) & ~invalid_bit;
+            4'b0001: in_window = valid & top_half & (quarter1) & ~invalid_bit;
+            4'b0010: in_window = valid & top_half & (quarter1 | quarter2) & ~invalid_bit;
+            4'b0100: in_window = valid & top_half & (quarter1| quarter2 | quarter3) & ~invalid_bit;
+            4'b1000: in_window = valid & top_half & (quarter1 | quarter2| quarter3 | quarter4) & ~invalid_bit;
+            default: in_window = valid & top_half & (quarter1) & ~invalid_bit;
         endcase
     end
     //wire in_window = valid & top_half & (quarter2 | quarter3) & ~invalid_bit;
