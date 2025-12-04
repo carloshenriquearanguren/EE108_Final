@@ -55,12 +55,28 @@ module music_player (
         .note_to_load(n2), .duration_to_load(d2), .load_new_note(l2),
         .generate_next_sample(generate_next_sample), .sample_out(s2), .new_sample_ready(r2));
 
-    // --- Mixer ---
-    // (s0 + s1 + s2) / 4
+    // --- Saturating Mixer ---
+    // Sum the voices with extended width (18 bits) to capture overflow
     wire signed [15:0] ss0 = s0;
     wire signed [15:0] ss1 = s1;
     wire signed [15:0] ss2 = s2;
-    wire signed [15:0] mixed = (ss0 >>> 2) + (ss1 >>> 2) + (ss2 >>> 2);
+    
+    wire signed [17:0] sum_extended;
+    assign sum_extended = {{2{ss0[15]}}, ss0} + {{2{ss1[15]}}, ss1} + {{2{ss2[15]}}, ss2};
+
+    reg signed [15:0] mixed;
+
+    always @(*) begin
+        // Check for positive overflow
+        if (sum_extended > 18'sd32767) 
+            mixed = 16'sd32767;
+        // Check for negative overflow
+        else if (sum_extended < -18'sd32768) 
+            mixed = -16'sd32768;
+        // No overflow, just truncate
+        else 
+            mixed = sum_extended[15:0];
+    end
 
     wire [15:0] mixed_reg;
     dffr #(16) mix_ff (.clk(clk), .r(reset), .d(mixed), .q(mixed_reg));
