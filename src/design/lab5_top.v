@@ -1,155 +1,152 @@
 module lab5_top(
-    /*
-    'define H_SYNC_PULSE 112
-	'define H_BACK_PORCH 248
-	'define H_FRONT_PORCH 48
-	'define V_SYNC_PULSE 3
-	'define V_BACK_PORCH 38
-	'define V_FRONT_PORCH 1
-    */ 	  
-
-    // System Clock (125MHz)
     input sysclk,
-    	 
+    
     // ADAU_1761 interface
-    output  AC_ADR0,            // I2C Address pin (DO NOT CHANGE)
-    output  AC_ADR1,            // I2C Address pin (DO NOT CHANGE)
-    
-    output  AC_DOUT,           // I2S Signals
-    input   AC_DIN,           // I2S Signals
-    input   AC_BCLK,           // I2S Byte Clock
-    input   AC_WCLK,           // I2S Channel Clock
-    
-    output  AC_MCLK,            // Master clock (48MHz)
-    output  AC_SCK,             // I2C SCK
-    inout   AC_SDA,             // I2C SDA 
+    output  AC_ADR0, AC_ADR1,
+    output  AC_DOUT,
+    input   AC_DIN, AC_BCLK, AC_WCLK,
+    output  AC_MCLK, AC_SCK,
+    inout   AC_SDA,
     
     // LEDs
     output wire [3:0] led,
     output wire [2:0] leds_rgb_0,
     output wire [2:0] leds_rgb_1,
 
-    input [2:0] btn,
-
-    /* 
-    //VGA OUTPUT 
-    output [3:0] VGA_R,
-    output [3:0] VGA_G,
-    output [3:0] VGA_B,
-    output VGA_HS,
-    output VGA_VS*/
+    input [3:0] btn,
+    input [1:0] sw,           // SW0 and SW1 for echo control
   
     // HDMI output
-    output TMDS_Clk_p,
-    output TMDS_Clk_n,
-    output [2:0] TMDS_Data_p,
-    output [2:0] TMDS_Data_n,
+    output TMDS_Clk_p, TMDS_Clk_n,
+    output [2:0] TMDS_Data_p, TMDS_Data_n,
     
-    // TODO: output LED0 onto something
-    //for Advanced waveform display
+    // Advanced waveform display
     input [3:0] h,
     input [3:0] w
-  
+
 );  
 
-    wire reset, play_button, next_button;
-    assign {reset, play_button, next_button} = btn;
+    wire reset, play_button, next_button, reverse_button;
+    assign reset = btn[0];
+    assign play_button = btn[1];
+    assign next_button = btn[2];
+    assign reverse_button = btn[3];  
 
     // Clock converter
     wire clk_100, display_clk, serial_clk;
-    wire LED0;      // TODO: assign this to a real LED
+    wire LED0;
  
     clk_wiz_0 U2 (
-        .clk_out1(clk_100),     // 100 MHz
-        .clk_out2(display_clk),	// 30 MHz
-        .clk_out3(serial_clk),	// 150 Mhz
+        .clk_out1(clk_100),
+        .clk_out2(display_clk),
+        .clk_out3(serial_clk),
         .reset(reset),
         .locked(LED0),
         .clk_in1(sysclk)
     );
 
-
-  
-    // button_press_unit's WIDTH parameter is exposed here so that you can
-    // reduce it in simulation.  Setting it to 1 effectively disables it.
     parameter BPU_WIDTH = 20;
-    // The BEAT_COUNT is parameterized so you can reduce this in simulation.
-    // If you reduce this to 100 your simulation will be 10x faster.
     parameter BEAT_COUNT = 1000;
 
-   
-    // These signals are for determining which color to display
-    wire [11:0] x;  // [0..1279]
-    wire [11:0] y;  // [0..1023] 
-    
-    // Color to display at the given x,y
+    wire [11:0] x, y;
     wire [31:0] pix_data;
-    wire [3:0]  r, g, b;
+    wire [3:0] r, g, b;
     wire [7:0] r_1, g_1, b_1;
       
-  wire [3:0] VGA_R;
-  wire [3:0] VGA_G;
-  wire [3:0] VGA_B;
-  wire VGA_HS;
-  wire VGA_VS;
- 
-//   
 //  ****************************************************************************
 //      Button processor units
 //  ****************************************************************************
-//  
     wire play;
     button_press_unit #(.WIDTH(BPU_WIDTH)) play_button_press_unit(
-        .clk(clk_100),
-        .reset(reset),
-        .in(play_button),
-        .out(play)
+        .clk(clk_100), .reset(reset), .in(play_button), .out(play)
     );
 
     wire next;
     button_press_unit #(.WIDTH(BPU_WIDTH)) next_button_press_unit(
-        .clk(clk_100),
-        .reset(reset),
-        .in(next_button),
-        .out(next)
+        .clk(clk_100), .reset(reset), .in(next_button), .out(next)
+    );
+    
+    // Reverse button 
+    wire reverse;
+    button_press_unit #(.WIDTH(BPU_WIDTH)) reverse_button_press_unit(
+        .clk(clk_100), .reset(reset), .in(reverse_button), .out(reverse)
     );
        
-//   
 //  ****************************************************************************
 //      The music player
 //  ****************************************************************************
-//       
     wire new_frame, new_frame1;
-    wire [15:0] codec_sample, flopped_sample;
+    wire [15:0] codec_sample_raw, flopped_sample;  // renamed: raw output from music_player
     wire new_sample, flopped_new_sample;
+    
     music_player #(.BEAT_COUNT(BEAT_COUNT)) music_player(
         .clk(clk_100),
         .reset(reset),
         .play_button(play),
         .next_button(next),
+        .reverse_button(reverse),    // NEW: reverse input
         .new_frame(new_frame1), 
-        .sample_out(codec_sample),
+        .sample_out(codec_sample_raw),
         .new_sample_generated(new_sample)
     );
+    
+    dffr pipeline_ff_new_frame (.clk(clk_100), .r(reset), .d(new_frame), .q(new_frame1));
+
+//  ****************************************************************************
+//      Echo Effect (SW0 = short echo, SW1 = long echo)
+//  ****************************************************************************
+    // At 48kHz: 100ms = 4800 samples, 250ms = 12000 samples, 400ms = 19200 samples
+    
+    // Echo parameters based on switch settings
+    wire echo_enable;
+    wire [14:0] delay_samples;
+    wire [2:0] atten_shift;
+    
+    // SW0 = short echo (150ms, attenuation /4)
+    // SW1 = long echo (350ms, attenuation /8)
+    // Both = combined effect (use longer delay)
+    // Neither = no echo
+    
+    assign echo_enable = sw[0] | sw[1];
+    assign delay_samples = sw[1] ? 15'd16800 : 15'd7200;  // 350ms or 150ms
+    assign atten_shift = sw[1] ? 3'd3 : 3'd2;             // /8 or /4
+    
+    wire [15:0] codec_sample_echo;
+    
+    echo #(
+        .SAMPLE_WIDTH(16),
+        .ADDR_BITS(15)
+    ) echo_inst (
+        .clk(clk_100),
+        .reset(reset),
+        .new_sample_ready(new_sample),
+        .in_sample(codec_sample_raw),
+        .echo_enable(echo_enable),
+        .delay_samples(delay_samples),
+        .atten_shift(atten_shift),
+        .out_sample(codec_sample_echo)
+    );
+    
+    // Final sample: use echo output
+    wire [15:0] codec_sample = codec_sample_echo;
+
+    // Sample register for waveform display
     dff #(.WIDTH(17)) sample_reg (
         .clk(clk_100),
         .d({new_sample, codec_sample}),
         .q({flopped_new_sample, flopped_sample})
     );
-    dffr pipeline_ff_new_frame (.clk(clk_100), .r(reset), .d(new_frame), .q(new_frame1));
 
-//   
 //  ****************************************************************************
 //      Codec interface
 //  ****************************************************************************
-//  
     wire [23:0] hphone_r = 0;
     wire [23:0] line_in_l = 0;  
-	wire [23:0] line_in_r =  0; 
-	
-    // Output the sample onto the LEDs for the fun of it.
-    assign leds_rgb_0 = codec_sample[15:13];
-    assign leds_rgb_1 = codec_sample[11:9];
+    wire [23:0] line_in_r = 0; 
+    
+    // Show echo status on RGB LEDs
+    assign leds_rgb_0 = {sw[1], sw[0], 1'b0};  // Show which echo mode
+    assign leds_rgb_1 = codec_sample[15:13];
     assign led = codec_sample[15:12];
 
     adau1761_codec adau1761_codec(
@@ -171,31 +168,9 @@ module lab5_top(
         .new_sample(new_frame)
     );  
     
-//   
 //  ****************************************************************************
 //      Display management
 //  ****************************************************************************
-//  
- 
-    //==========================================================================
-    // Display management -> do not touch!
-    //==========================================================================
-	 
-//	wire valid, de;
-//    vga_generator vga_g (
-//        .clk(clk_100),
-//        .r(r), 
-//        .g(g),
-//        .b(b),
-//        .color({r_1, g_1, b_1}),
-//        .xpos(x),
-//        .ypos(y),
-//        .valid(valid),
-//        .de(de),
-//        .vsync(VGA_VS),
-//        .hsync(VGA_HS)
-//    );
-
     wire vde, hsync, vsync, blank;
     vga_controller_800x480_60 vga_control (
         .pixel_clk(display_clk),
@@ -208,36 +183,31 @@ module lab5_top(
         .blank(blank)
     );
     
-    
-    
-    
     wave_display_top wd_top (
-		.clk (clk_100),
-		.reset (reset),
-		.new_sample (new_sample),
-		.sample (flopped_sample),
+        .clk(clk_100),
+        .reset(reset),
+        .new_sample(new_sample),
+        .sample(flopped_sample),
         .x(x[10:0]),
         .y(y[9:0]),
-        //.valid(valid),
-		.valid(vde),
-		.vsync(vsync),
-		.r(r_1),
-		.g(g_1),
-		.b(b_1),
-		//for awd 
-		.w(w),
-		.h(h)
+        .valid(vde),
+        .vsync(vsync),
+        .r(r_1),
+        .g(g_1),
+        .b(b_1),
+        .w(w),
+        .h(h)
     );
     
     assign r = r_1[7:4];
     assign g = g_1[7:4];
     assign b = b_1[7:4];
     assign pix_data = {
-                        8'b0, 
-                        r[3], r[3], r[2], r[2], r[1], r[1], r[0], r[0],
-                        g[3], g[3], g[2], g[2], g[1], g[1], g[0], g[0],
-                        b[3], b[3], b[2], b[2], b[1], b[1], b[0], b[0]
-                       }; 
+        8'b0, 
+        r[3], r[3], r[2], r[2], r[1], r[1], r[0], r[0],
+        g[3], g[3], g[2], g[2], g[1], g[1], g[0], g[0],
+        b[3], b[3], b[2], b[2], b[1], b[1], b[0], b[0]
+    }; 
                   
     hdmi_tx_0 U3 (
         .pix_clk(display_clk),
@@ -253,6 +223,5 @@ module lab5_top(
         .TMDS_DATA_P(TMDS_Data_p),
         .TMDS_DATA_N(TMDS_Data_n)
     );
-   
    
 endmodule
