@@ -111,3 +111,4 @@ module wave_display (
     assign wave_display_idle = vsync;
 
 
+endmodule
