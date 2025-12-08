@@ -5,6 +5,7 @@ module song_reader (
     input [1:0] song,
     input beat,
     input backwards,
+    input fast_mode,   // NEW: 2x speed flag
     output song_done,
 
     output reg [5:0] note0, output reg [5:0] duration0, output reg load_note0,
@@ -32,6 +33,8 @@ module song_reader (
     reg next_backwards_latched;
     reg done;
 
+    reg [5:0] dec;  // decrement amount for wait_counter (1 or 2)
+    
     dffr #(3) state_ff (.clk(clk), .r(reset), .d(next_state), .q(state));
     dffr #(7) note_idx_ff (.clk(clk), .r(reset), .d(next_note_index), .q(note_index));
     dffr #(6) wait_cnt_ff (.clk(clk), .r(reset), .d(next_wait_counter), .q(wait_counter));
@@ -54,6 +57,7 @@ module song_reader (
     
     // --- Next State Logic ---
     always @(*) begin
+
         next_state = state;
         next_note_index = note_index;
         next_wait_counter = wait_counter;
@@ -64,6 +68,9 @@ module song_reader (
         load_note0 = 0; note0 = 0; duration0 = 0;
         load_note1 = 0; note1 = 0; duration1 = 0;
         load_note2 = 0; note2 = 0; duration2 = 0;
+
+        // Default decrement: 1 in normal mode, 2 in fast_mode
+        dec = fast_mode ? 6'd2 : 6'd1;
 
         case (state)
             S_IDLE: begin
@@ -137,8 +144,8 @@ module song_reader (
 
             S_WAIT_TIME: begin
                 if (play && beat) begin
-                    if (wait_counter <= 6'd1) begin
-                        // Move to next address
+                    if (wait_counter <= dec) begin
+                        // Done waiting this command, move to next address
                         if (backwards_latched) begin
                             if (note_index > 0) begin
                                 next_note_index = note_index - 7'd1;
@@ -151,7 +158,7 @@ module song_reader (
                             next_state = S_READ;
                         end
                     end else begin
-                        next_wait_counter = wait_counter - 6'd1;
+                        next_wait_counter = wait_counter - dec;
                     end
                 end
             end
