@@ -108,8 +108,8 @@ module lab5_top(
     // Neither = no echo
     
     assign echo_enable = sw[0] | sw[1];
-    assign delay_samples = sw[1] ? 15'd16800 : 15'd7200;  // 350ms or 150ms
-    assign atten_shift = sw[1] ? 3'd3 : 3'd2;             // /8 or /4
+    assign delay_samples = sw[1] ? 15'd24000 : 15'd14400;  // 500ms or 300ms
+    assign atten_shift = sw[1] ? 3'd2 : 3'd1;             // /4 or /2
     
     wire [15:0] codec_sample_echo;
     
