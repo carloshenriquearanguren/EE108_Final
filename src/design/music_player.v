@@ -3,7 +3,8 @@ module music_player (
     input reset,
     input play_button,
     input next_button,
-    input reverse_button,        // NEW
+    input reverse_button,
+    input fast_button,                // NEW: btna_b pulse
     input new_frame,
     output wire new_sample_generated,
     output wire [15:0] sample_out
@@ -11,18 +12,27 @@ module music_player (
 
     parameter BEAT_COUNT = 1000;
 
+    // --- Fast mode latch (2x speed) ---
+    reg fast_mode;
+    always @(posedge clk) begin
+        if (reset)
+            fast_mode <= 1'b0;
+        else if (fast_button)
+            fast_mode <= ~fast_mode;
+    end
+
     // --- MCU ---
-    wire play, reset_player, song_done, backwards;  // NEW: backwards
+    wire play, reset_player, song_done, backwards;
     wire [1:0] current_song;
     mcu mcu_inst (
         .clk(clk), .reset(reset),
         .play_button(play_button), 
         .next_button(next_button),
-        .reverse_button(reverse_button),  // NEW
+        .reverse_button(reverse_button),
         .play(play), 
         .reset_player(reset_player),
         .song(current_song), 
-        .backwards(backwards),            // NEW
+        .backwards(backwards),
         .song_done(song_done)
     );
 
@@ -40,7 +50,8 @@ module music_player (
     song_reader reader (
         .clk(clk), .reset(reset | reset_player),
         .play(play), .song(current_song), .beat(beat), 
-        .backwards(backwards),            // NEW
+        .backwards(backwards),
+        .fast_mode(fast_mode),          // NEW
         .song_done(song_done),
         .note0(n0), .duration0(d0), .load_note0(l0),
         .note1(n1), .duration1(d1), .load_note1(l1),
