@@ -50,11 +50,11 @@ module wave_display (
     // read_value_adjusted = read_value/2 + 32 
     reg [7:0] read_value_adjusted;
     always @(*) begin
-        case (h)
+        casex (h)
             4'b0001: read_value_adjusted = (read_value >> 3) + 8'd64;
-            4'b0010: read_value_adjusted = (read_value >> 2) + 8'd64;
-            4'b0100: read_value_adjusted = (read_value >> 1) + 8'd64;
-            4'b1000: read_value_adjusted = read_value;
+            4'b001x: read_value_adjusted = (read_value >> 2) + 8'd64;
+            4'b01xx: read_value_adjusted = (read_value >> 1) + 8'd64;
+            4'b1xxx: read_value_adjusted = read_value;
             default: read_value_adjusted = (read_value >> 3) + 8'd64;
         endcase 
     end
@@ -100,15 +100,98 @@ module wave_display (
     wire [7:0] hi = (sample_curr < sample_prev) ? sample_prev : sample_curr;
     
     assign valid_pixel = in_window & (y8 >= lo) & (y8 <= hi);
-
+    reg [7:0] r1, g1, b1;
     // White for waveform, black otherwise
-    assign r = valid_pixel ? 8'hFF : 8'h00;
-    assign g = valid_pixel ? 8'hFF : 8'h00;
-    assign b = valid_pixel ? 8'hFF : 8'h00;
+    //implemented 12 different colors.  
+    always @(*) begin
+        case (h)
+            4'b0001: begin
+            r1 = valid_pixel ? 8'h00 : 8'h00;
+            g1 = valid_pixel ? 8'h00 : 8'h00;
+            b1 = valid_pixel ? 8'hFF : 8'h00;
+            end
+            
+            4'b0011: begin
+            r1 = valid_pixel ? 8'h00 : 8'h00;
+            g1 = valid_pixel ? 8'hFF : 8'h00;
+            b1 = valid_pixel ? 8'hFF : 8'h00;
+            end
+            
+            4'b0101: begin
+            r1 = valid_pixel ? 8'hFF : 8'h00;
+            g1 = valid_pixel ? 8'h33 : 8'h00;
+            b1 = valid_pixel ? 8'hAA : 8'h00;
+            end
+            
+            4'b0110: begin
+            r1 = valid_pixel ? 8'h00 : 8'h00;
+            g1 = valid_pixel ? 8'hFF : 8'h00;
+            b1 = valid_pixel ? 8'h00 : 8'h00;
+            end
+            
+            4'b0111: begin
+            r1 = valid_pixel ? 8'hFF : 8'h00;
+            g1 = valid_pixel ? 8'h00 : 8'h00;
+            b1 = valid_pixel ? 8'h00 : 8'h00;
+            end
+            
+            4'b1001: begin
+            r1 = valid_pixel ? 8'hAA : 8'h00;
+            g1 = valid_pixel ? 8'hBB : 8'h00;
+            b1 = valid_pixel ? 8'hCC : 8'h00;
+            end
+            
+            4'b1010: begin
+            r1 = valid_pixel ? 8'hAA : 8'h00;
+            g1 = valid_pixel ? 8'hDD : 8'h00;
+            b1 = valid_pixel ? 8'hEE : 8'h00;
+            end
+            
+            4'b1011: begin
+            r1 = valid_pixel ? 8'hAA : 8'h00;
+            g1 = valid_pixel ? 8'hBB : 8'h00;
+            b1 = valid_pixel ? 8'hEE : 8'h00;
+            end
+            
+            4'b1100: begin
+            r1 = valid_pixel ? 8'hFF : 8'h00;
+            g1 = valid_pixel ? 8'hAA : 8'h00;
+            b1 = valid_pixel ? 8'hBB : 8'h00;
+            end
+            
+            4'b1101: begin
+            r1 = valid_pixel ? 8'hFF : 8'h00;
+            g1 = valid_pixel ? 8'h00 : 8'h00;
+            b1 = valid_pixel ? 8'hAA : 8'h00;
+            end
+            
+            4'b1110: begin
+            r1 = valid_pixel ? 8'hCC : 8'h00;
+            g1 = valid_pixel ? 8'hAA : 8'h00;
+            b1 = valid_pixel ? 8'h00 : 8'h00;
+            end
+            
+            4'b1111: begin
+            r1 = valid_pixel ? 8'hDD : 8'h00;
+            g1 = valid_pixel ? 8'hBB : 8'h00;
+            b1 = valid_pixel ? 8'hCC : 8'h00;
+            end
+            
+            default: begin
+            r1 = valid_pixel ? 8'hFF : 8'h00;
+            g1 = valid_pixel ? 8'hFF : 8'h00;
+            b1 = valid_pixel ? 8'hFF : 8'h00;
+            end
+            
+        endcase
+    end
+    assign r = r1; //valid_pixel ? 8'hFF : 8'h00;
+    assign g = g1; // valid_pixel ? 8'hFF : 8'h00;
+    assign b = b1; //valid_pixel ? 8'hFF : 8'h00;
 
     // Generate wave_display_idle signal during vsync (vertical blanking)
     // This allows wave_capture to safely switch buffers between frames
     assign wave_display_idle = vsync;
 
-
 endmodule
+
